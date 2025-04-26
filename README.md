@@ -37,8 +37,10 @@ The project is written primarily in C++ and CUDA C++, with a clear separation of
     *   `SetAddress` and `SetPattern` transfer the target addresses/lookup tables to the GPU.
     *   `SetKeys` transfers the initial public keys for each GPU thread to the device.
     *   `Launch` executes the CUDA kernel (`comp_keys`) on the GPU and retrieves the results from the output buffer. It also includes logic to handle potential overflow of the output buffer and reduce the batch size if needed.
-    *   `GPU/GPUEngine.cu` contains the CUDA kernel `comp_keys`, which is the core of the GPU computation. This kernel runs on multiple threads in parallel on the GPU. Each thread performs point multiplication (computing public keys from private keys), hashing (SHA256 and RIPEMD160), and checks the generated hash against the target addresses/prefixes stored in GPU memory. The kernel leverages optimized CUDA modular arithmetic functions.
-    *   `FreeGPUEngine` is used to release GPU resources, particularly for the pause functionality.
+    *   `GPU/GPUEngine.cu` contains the CUDA kernel `comp_keys`, which is the core of the GPU computation. This kernel runs on multiple threads in parallel on the GPU. Each thread takes its assigned starting public key and iteratively computes the public keys for subsequent private keys within its assigned range using highly optimized elliptic curve operations (point addition and doubling) implemented in CUDA.
+    *   For each computed public key, the kernel calculates the corresponding Bitcoin address hash (RIPEMD160 of the SHA256 of the public key) and checks if the initial part of the hash (or the full hash for full address search) matches any of the target addresses/prefixes stored in the GPU's lookup table.
+    *   If a match is found, the relevant information (thread ID, increment, endomorphism flag, hash) is stored in an output buffer on the GPU.
+    *   After the kernel completes its execution for a batch, the results from the output buffer are transferred back to the CPU.
 
 *   **`SECP256k1.h`**:
     *   Defines the `Secp256K1` class, which encapsulates the operations related to the secp256k1 elliptic curve used in Bitcoin.
@@ -168,7 +170,7 @@ Windows:
 
 ```./VanitySearch.exe -gpuId 0 -i input.txt -o output.txt -start 3BA89530000000000 -range 40```
 
-```./VanitySearch.exe -gpuId 1 -o output.txt -start 3BA89530000000000 -range 42 1MVDYgVaSN6iKKEsbzRUAYFrYJadLYZvvZ```
+```./VanitySearch.exe -gpuId 1 -o output.txt -start 3BA89530000000000 -range 42 1MVDYgVaSN6iKKEsbzRUAYFrYadLYZvvZ```
 
 ```./VanitySearch.exe -gpuId 0 -start 3BA89530000000000 -range 41 1MVDYgVaSN6iKKEsbzRUAYFrYJadLYZvvZ ```
 
@@ -176,7 +178,16 @@ Linux
 
 ```./vanitysearch -gpuId 0 -i input.txt -o output.txt -start 3BA89530000000000 -range 40```
 
-
 ## License
 
 VanitySearch-Bitrack is licensed under GPLv3.
+
+## Support
+
+If you have any luck using this software and would like to be generous, you can send a donation to the following Bitcoin address:
+
+`bc1qu0mcrmdwhkkwds77tz5dsdr5p0uhqw6apua90t`
+
+Remember to pump [Kotia.cash](https://kotia.cash)!
+
+A big thank you to JLP for the first version of VanitySearch: [https://github.com/JeanLucPons/VanitySearch](https://github.com/JeanLucPons/VanitySearch)
