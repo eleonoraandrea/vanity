@@ -17,6 +17,7 @@
 
 #include <string.h>
 #include "sha512.h"
+#include <cstdint>
 
 #define BSWAP
 #define SHA512_BLOCK_SIZE	128

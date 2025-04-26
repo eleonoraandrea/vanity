@@ -13,12 +13,13 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
-*/
+ */
 
 #ifndef GPUENGINEH
 #define GPUENGINEH
 
 #include <vector>
+#include <unordered_map>
 #include "../SECP256k1.h"
 
 #define SEARCH_COMPRESSED 0
@@ -27,7 +28,7 @@
 
 
 // Number of thread per block
-//#define NB_TRHEAD_PER_GROUP 128 ///////////////////////////////256
+//#define NB_TRHEAD_PER_GROUP 128 ////////////////////////////////256
 #define ITEM_SIZE 28  ///28
 #define ITEM_SIZE32 (ITEM_SIZE/4)
 #define _64K 65536
@@ -36,12 +37,12 @@ static const char *searchModes[] = {"Compressed","Uncompressed","Compressed or U
 
 // Number of key per thread (must be a multiple of GRP_SIZE) per kernel call
 
-	
-//typedef uint16_t address_t;
+
 typedef uint16_t address_t;
 typedef uint32_t addressl_t;
 
 typedef struct {
+
   uint32_t thId;
   int16_t  incr;
   int16_t  endo;
@@ -59,7 +60,7 @@ class GPUEngine {
 
 public:
 
-  GPUEngine(int gpuId, uint32_t maxFound);
+  GPUEngine(int gpuId, uint32_t maxFound, int batchSize);
   ~GPUEngine();
   void FreeGPUEngine();
   void SetAddress(std::vector<address_t> addresses);
@@ -81,7 +82,7 @@ public:
 
 private:
 
-  bool callKernel();
+  bool callKernel(int batchSize);
   static void ComputeIndex(std::vector<int> &s, int depth, int n);
   static void Browse(FILE *f,int depth, int max, int s);
   bool CheckHash(uint8_t *h, std::vector<ITEM>& found, int tid, int incr, int endo, int *ok);
@@ -109,10 +110,10 @@ private:
   uint32_t outputSize;
   std::string pattern;
   bool hasPattern;
+  int batchSize;
 
- 
-
-
+  // Cache for precomputed hashes
+  std::unordered_map<uint64_t, uint8_t*> hashCache;
 };
 
 #endif // GPUENGINEH

@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
-*/
+ */
 
 
 #include <sstream> 
@@ -74,16 +74,16 @@ void setTerminalRawMode(bool enable) {
 void setNonBlockingInput(bool enable) {
 	int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
 	if (enable) {
-		fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK); // Modalità non bloccante
+		fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK); // Modalit non bloccante
 	}
 	else {
-		fcntl(STDIN_FILENO, F_SETFL, flags & ~O_NONBLOCK); // Ripristina modalità bloccante
+		fcntl(STDIN_FILENO, F_SETFL, flags & ~O_NONBLOCK); // Ripristina modalit bloccante
 	}
 }
 
 void monitorKeypress() {
 	setTerminalRawMode(true);
-	setNonBlockingInput(true);  // Imposta stdin in modalità non bloccante
+	setNonBlockingInput(true);  // Imposta stdin in modalit non bloccante
 
 	while (!stopMonitorKey) {
 		Timer::SleepMillis(1);
@@ -95,31 +95,31 @@ void monitorKeypress() {
 		}
 	}
 
-	setNonBlockingInput(false);  // Ripristina modalità normale
+	setNonBlockingInput(false);  // Ripristina modalit normale
 	setTerminalRawMode(false);
 }
 #endif
 
 
-#define RELEASE "2.01 by FixedPaul"
+#define RELEASE "2.01 by Ezio"
 
 using namespace std;
 
 // ------------------------------------------------------------------------------------------
 
 void printUsage() {
-
-	printf("VanitySeacrh [-v] [-gpuId] [-i inputfile] [-o outputfile] [-start HEX] [-range] [-m] [-stop]\n \n");
-	printf(" -v: Print version\n");
-	printf(" -i inputfile: Get list of addresses to search from specified file\n");
-	printf(" -o outputfile: Output results to the specified file\n");
-	printf(" -gpuId: GPU to use, default is 0\n");
-	printf(" -start start Private Key HEX\n");
-	printf(" -range bit range dimension. start -> (start + 2^range).\n");
-	printf(" -m: Max number of prefixes found by each kernel call, default is 262144 (use multiple of 65536)\n");
-	printf(" -stop: Stop when all prefixes are found\n");
-	exit(-1);
-
+    printf("Usage: VanitySearch [options]\n");
+    printf("Options:\n");
+    printf("  -v          Print version\n");
+    printf("  -gpuId      GPU to use, default is 0\n");
+    printf("  -batchSize  Batch size for GPU processing, default is 1\n");
+    printf("  -i          Input file with addresses to search\n");
+    printf("  -o          Output file for results\n");
+    printf("  -start      Starting private key in HEX\n");
+    printf("  -range      Bit range dimension (start -> start + 2^range)\n");
+    printf("  -m          Max number of prefixes found per kernel call (default: 262144)\n");
+    printf("  -stop       Stop when all prefixes are found\n");
+    exit(-1);
 }
 
 
@@ -349,20 +349,28 @@ void generateKeyPair(Secp256K1* secp, string seed, int searchMode, bool paranoia
 }
 
 void outputAdd(string outputFile, int addrType, string addr, string pAddr, string pAddrHex) {
+  fprintf(stdout, "DEBUG: Entering outputAdd() function\n");
+  fprintf(stdout, "DEBUG: Output file path: %s\n", outputFile.c_str());
+  fflush(stdout);
 
-	FILE* f = stdout;
-	bool needToClose = false;
+  FILE* f = stdout;
+  bool needToClose = false;
 
-	if (outputFile.length() > 0) {
-		f = fopen(outputFile.c_str(), "a");
-		if (f == NULL) {
-			fprintf(stderr, "Cannot open %s for writing\n", outputFile.c_str());
-			f = stdout;
-		}
-		else {
-			needToClose = true;
-		}
-	}
+  if (outputFile.length() > 0) {
+    fprintf(stdout, "DEBUG: Attempting to open output file\n");
+    fflush(stdout);
+    f = fopen(outputFile.c_str(), "a");
+    if (f == NULL) {
+      fprintf(stderr, "Cannot open %s for writing\n", outputFile.c_str());
+      perror("Error details");
+      f = stdout;
+    }
+    else {
+      needToClose = true;
+      fprintf(stdout, "DEBUG: Successfully opened output file\n");
+      fflush(stdout);
+    }
+  }
 
 	fprintf(f, "\nPublic Addr: %s\n", addr.c_str());
 
@@ -541,6 +549,7 @@ int main(int argc, char* argv[]) {
 	uint32_t maxFound = 65536*4;
 	int range = 30;
 	string start = "0";
+	int batchSize = 8;
 	
 	// bitcrack mod
 	BITCRACK_PARAM bitcrack, *bc;
@@ -554,6 +563,12 @@ int main(int argc, char* argv[]) {
 	bc->ksFinish.Set(&maxKey);	
 
 	while (a < argc) {
+
+	    if (strcmp(argv[a], "-batchSize") == 0) {
+	        a++;
+	        batchSize = getInt("batchSize", argv[a]);
+	        a++;
+	    }
 
 		if (strcmp(argv[a], "-gpuId") == 0) {
 			a++;
@@ -654,7 +669,7 @@ int main(int argc, char* argv[]) {
 		Pause = false;
 	repeatP:
 		Paused = false;
-		VanitySearch* v = new VanitySearch(secp, address, searchMode, stop, outputFile, maxFound, bc);
+		VanitySearch* v = new VanitySearch(secp, address, searchMode, stop, outputFile, maxFound, bc, batchSize);
 		v->Search(gpuId, gridSize);
 
 		while (Paused) {

@@ -1,3 +1,7 @@
+#include <fmt/core.h>
+#include <fmt/format.h>
+#include <vector>
+#include <string>
 /*
  * This file is part of the VanitySearch distribution (https://github.com/JeanLucPons/VanitySearch).
  * Copyright (c) 2019 Jean Luc PONS.
@@ -13,7 +17,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
-*/
+ */
 
 #include "Vanity.h"
 #include "Base58.h"
@@ -30,16 +34,13 @@
 #include <thread>
 #include <atomic>
 
-//#define GRP_SIZE 256
-
-using namespace std;
-
 //Point Gn[GRP_SIZE / 2];
 //Point _2Gn;
 
-VanitySearch::VanitySearch(Secp256K1* secp, vector<std::string>& inputAddresses, int searchMode,
-	bool stop, string outputFile, uint32_t maxFound, BITCRACK_PARAM* bc):inputAddresses(inputAddresses) 
+VanitySearch::VanitySearch(Secp256K1* secp, std::vector<std::string>& inputAddresses, int searchMode,
+	bool stop, std::string outputFile, uint32_t maxFound, BITCRACK_PARAM* bc, int batchSize):inputAddresses(inputAddresses)
 {
+    this->batchSize = batchSize;
 	this->secp = secp;
 	this->searchMode = searchMode;
 	this->stopWhenFound = stop;
@@ -86,7 +87,7 @@ VanitySearch::VanitySearch(Secp256K1* secp, vector<std::string>& inputAddresses,
 				address_t p = itAddresses[j].sAddress;
 
 				if (addresses[p].items == NULL) {
-					addresses[p].items = new vector<ADDRESS_ITEM>();
+					addresses[p].items = new std::vector<ADDRESS_ITEM>();
 					addresses[p].found = false;
 					usedAddress.push_back(p);
 				}
@@ -130,7 +131,7 @@ VanitySearch::VanitySearch(Secp256K1* secp, vector<std::string>& inputAddresses,
 				}
 			}
 
-			sort(lit.lAddresses.begin(), lit.lAddresses.end());
+			std::sort(lit.lAddresses.begin(), lit.lAddresses.end());
 			usedAddressL.push_back(lit);
 			if ((uint32_t)lit.lAddresses.size() > maxI) maxI = (uint32_t)lit.lAddresses.size();
 			if ((uint32_t)lit.lAddresses.size() < minI) minI = (uint32_t)lit.lAddresses.size();
@@ -144,7 +145,7 @@ VanitySearch::VanitySearch(Secp256K1* secp, vector<std::string>& inputAddresses,
 	if (loadingProgress)
 		fprintf(stdout, "\n");
 	
-	string searchInfo = string(searchModes[searchMode]);
+	std::string searchInfo = std::string(searchModes[searchMode]);
 	if (nbAddress < 10) 
 	{	
 		for (int i = 0; i < nbAddress; i++)
@@ -180,7 +181,7 @@ VanitySearch::VanitySearch(Secp256K1* secp, vector<std::string>& inputAddresses,
 	lambda2.SetBase16("ac9c52b33fa3cf1f5ad9e3fd77ed9ba4a880b9fc8ec739c2e0cfc810b51283ce");
 
 	startKey.Set(&bc->ksNext);	
-
+	
 	char* ctimeBuff;
 	time_t now = time(NULL);
 	ctimeBuff = ctime(&now);
@@ -203,7 +204,7 @@ bool VanitySearch::isSingularAddress(std::string pref) {
 bool VanitySearch::initAddress(std::string& address, ADDRESS_ITEM* it) {
 
 	std::vector<unsigned char> result;
-	string dummy1 = address;
+	std::string dummy1 = address;
 	int nbDigit = 0;
 	bool wrong = false;
 
@@ -257,7 +258,7 @@ bool VanitySearch::initAddress(std::string& address, ADDRESS_ITEM* it) {
 			memcpy(it->hash160, witprog, 20);
 			it->sAddress = *(address_t*)(it->hash160);
 			it->lAddress = *(addressl_t*)(it->hash160);
-			it->address = (char*)address.c_str();
+			it->address = address; // Store a copy of the address string
 			it->addressLength = (int)address.length();
 			return true;
 
@@ -284,7 +285,7 @@ bool VanitySearch::initAddress(std::string& address, ADDRESS_ITEM* it) {
 		it->sAddress = *(address_t*)data;		
 		it->isFull = false;
 		it->lAddress = 0;
-		it->address = (char*)address.c_str();
+		it->address = address; // Store a copy of the address string
 		it->addressLength = (int)address.length();
 
 		return true;
@@ -306,7 +307,7 @@ bool VanitySearch::initAddress(std::string& address, ADDRESS_ITEM* it) {
 			memcpy(it->hash160, result.data() + 1, 20);
 			it->sAddress = *(address_t*)(it->hash160);
 			it->lAddress = *(addressl_t*)(it->hash160);
-			it->address = (char*)address.c_str();
+			it->address = address; // Store a copy of the address string
 			it->addressLength = (int)address.length();
 			return true;
 		}
@@ -322,7 +323,7 @@ bool VanitySearch::initAddress(std::string& address, ADDRESS_ITEM* it) {
 			it->isFull = false;
 			it->sAddress = 0;
 			it->lAddress = 0;
-			it->address = (char*)address.c_str();
+			it->address = address; // Store a copy of the address string
 			it->addressLength = (int)address.length();
 			return true;
 		}
@@ -360,7 +361,7 @@ bool VanitySearch::initAddress(std::string& address, ADDRESS_ITEM* it) {
 		
 		it->isFull = false;
 		it->lAddress = 0;
-		it->address = (char*)address.c_str();
+		it->address = address; // Store a copy of the address string
 		it->addressLength = (int)address.length();
 
 		return true;
@@ -396,7 +397,7 @@ void VanitySearch::enumCaseUnsentiveAddress(std::string s, std::vector<std::stri
 			else         tmp[letterpos[j]] = letter[j];
 		}
 
-		list.push_back(string(tmp));
+		list.push_back(std::string(tmp));
 
 	}
 
@@ -404,153 +405,132 @@ void VanitySearch::enumCaseUnsentiveAddress(std::string s, std::vector<std::stri
 
 // ----------------------------------------------------------------------------
 
-void VanitySearch::output(string addr, string pAddr, string pAddrHex, std::string pubKey) {
+void VanitySearch::output(const std::vector<std::tuple<std::string, std::string, std::string, std::string>>& foundKeys) {
+  // Get current timestamp
+  time_t now = time(0);
+  char timestamp[64];
+  strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", localtime(&now));
+  
+  // Print to console immediately
+  for (const auto& key : foundKeys) {
+    printf("\n=== FOUND KEY ===\n");
+    printf("Timestamp: %s\n", timestamp);
+    printf("Public Address: %s\n", std::get<0>(key).c_str());
+    printf("Private Key (WIF): %s\n", std::get<1>(key).c_str());
+    printf("Private Key (HEX): 0x%s\n", std::get<2>(key).c_str());
+    printf("Public Key: %s\n", std::get<3>(key).c_str());
+    printf("=================\n");
+  }
+  fflush(stdout);
 
+  // Get mutex with timeout
+  bool gotMutex = false;
 #ifdef WIN64
-	WaitForSingleObject(ghMutex, INFINITE);
+  DWORD waitResult = WaitForSingleObject(ghMutex, 10000); // 10 second timeout
+  gotMutex = (waitResult == WAIT_OBJECT_0);
 #else
-	pthread_mutex_lock(&ghMutex);
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  ts.tv_sec += 10; // 10 second timeout
+  int waitResult = pthread_mutex_timedlock(&ghMutex, &ts);
+  gotMutex = (waitResult == 0);
 #endif
 
-	FILE* f = stdout;
-	bool needToClose = false;
+  if (!gotMutex) {
+    fprintf(stderr, "\nERROR: Could not acquire output mutex after 10 seconds\n");
+    for (const auto& key : foundKeys) {
+      fprintf(stderr, "Key found but not saved: %s\n", std::get<0>(key).c_str());
+    }
+    fflush(stderr);
+    return;
+  }
 
-	if (outputFile.length() > 0) {
-		f = fopen(outputFile.c_str(), "a");
-		if (f == NULL) {
-			fprintf(stderr, "Cannot open %s for writing\n", outputFile.c_str());
-			f = stdout;
-		}
-		else {
-			needToClose = true;
-		}
-	}
+  FILE* f = stdout;
+  bool needToClose = false;
+  
+  if (!outputFile.empty()) {
+      f = fopen(outputFile.c_str(), "a");
+      if (!f) {
+        fprintf(stderr, "\nERROR: Cannot open %s for writing: %s\n", outputFile.c_str(), strerror(errno));
+        f = stdout;
+        needToClose = false;
+    } else {
+      needToClose = true;
+      // Write to file with timestamp
+      for (const auto& key : foundKeys) {
+        fprintf(f, "\n=== FOUND KEY ===\n");
+        fprintf(f, "Timestamp: %s\n", timestamp);
+        fprintf(f, "Public Address: %s\n", std::get<0>(key).c_str());
+        fprintf(f, "Private Key (WIF): %s\n", std::get<1>(key).c_str());
+        fprintf(f, "Private Key (HEX): 0x%s\n", std::get<2>(key).c_str());
+        fprintf(f, "Public Key: %s\n", std::get<3>(key).c_str());
+        fprintf(f, "=================\n");
+      }
+      
+      // Flush immediately to ensure write
+      if (fflush(f) != 0) {
+        fprintf(stderr, "\nERROR: Failed to flush output file\n");
+      }
+    }
+  }
 
-
-
-
-	if (f != stdout)
-		fprintf(f, "\nPublic Addr: %s\n", addr.c_str());	
-	fprintf(stdout, "\nPublic Addr: %s\n", addr.c_str());
-
-	switch (searchType) {
-	case P2PKH:
-		if (f != stdout)
-			fprintf(f, "Priv (WIF): p2pkh:%s\n", pAddr.c_str());
-		fprintf(stdout, "Priv (WIF): p2pkh:%s\n", pAddr.c_str());
-		break;
-	case P2SH:
-		if (f != stdout)
-			fprintf(f, "Priv (WIF): p2wpkh-p2sh:%s\n", pAddr.c_str());
-		fprintf(stdout, "Priv (WIF): p2wpkh-p2sh:%s\n", pAddr.c_str());
-		break;
-	case BECH32:
-		if (f != stdout)
-			fprintf(f, "Priv (WIF): p2wpkh:%s\n", pAddr.c_str());
-		fprintf(stdout, "Priv (WIF): p2wpkh:%s\n", pAddr.c_str());
-		break;
-	}
-
-	if (f != stdout)
-		fprintf(f, "Priv (HEX): 0x%064s\n", pAddrHex.c_str());	
-	fprintf(stdout, "Priv (HEX): 0x%064s\n", pAddrHex.c_str());
-	fprintf(stdout, "\n");
-
-	if (f != stdout)
-		fflush(f);
-	fflush(stdout);
-	//fflush(stderr);	
-
-	if (needToClose)
-		fclose(f);
+  if (f != stdout) {
+    if (fclose(f) != 0) {
+      fprintf(stderr, "Error closing output file\n");
+    }
+    f = NULL;
+  }
 
 #ifdef WIN64
-	ReleaseMutex(ghMutex);
+  ReleaseMutex(ghMutex);
 #else
-	pthread_mutex_unlock(&ghMutex);
+  pthread_mutex_unlock(&ghMutex);
 #endif
+}
+  
+
+
+
+
+bool VanitySearch::checkPrivKey(std::string addr, Int& key, int32_t incr, int endomorphism, bool mode) {
+    Int k;
+    Point p;
+    std::string chkAddr;
+
+    k.Set(&key);
+    if (incr != 0) {
+        Int i;
+        i.SetInt32(incr);
+        k.Add(&i);
+    }
+
+    if (endomorphism == 1) {
+        k.ModMulK1(&lambda);
+    } else if (endomorphism == 2) {
+        k.ModMulK1(&lambda2);
+    }
+
+    p = secp->ComputePublicKey(&k);
+    chkAddr = secp->GetAddress(searchType, mode, p);
+
+    if (chkAddr == addr) {
+        foundKeys.push_back({addr, secp->GetPrivAddress(mode, k), k.GetBase16(), secp->GetPublicKeyHex(mode, p)});
+        return true;
+    }
+    return false;
 }
 
 void VanitySearch::updateFound() {
-
-	// Check if all addresses has been found
-	// Needed only if stopWhenFound is asked
-	if (stopWhenFound) 	{
-
-		bool allFound = true;
-		for (int i = 0; i < (int)usedAddress.size(); i++) {
-			bool iFound = true;
-			address_t p = usedAddress[i];
-			if (!addresses[p].found) {
-				if (addresses[p].items) {
-					for (int j = 0; j < (int)addresses[p].items->size(); j++) {
-						iFound &= *((*addresses[p].items)[j].found);
-					}
-				}
-				addresses[usedAddress[i]].found = iFound;
-			}
-			allFound &= iFound;
-		}
-
-		endOfSearch = allFound;		
-	}		
+    if (!foundKeys.empty()) {
+        output(foundKeys);
+        foundKeys.clear();
+    }
 }
-
-bool VanitySearch::checkPrivKey(string addr, Int& key, int32_t incr, int endomorphism, bool mode) {
-
-	Int k(&key);	
-
-	if (incr < 0) {
-		k.Add((uint64_t)(-incr));
-		k.Neg();
-		k.Add(&secp->order);		
-	}
-	else {
-		k.Add((uint64_t)incr);
-	}
-
-	// Endomorphisms
-	switch (endomorphism) {
-	case 1:
-		k.ModMulK1order(&lambda);		
-		break;
-	case 2:
-		k.ModMulK1order(&lambda2);		
-		break;
-	}
-
-	// Check addresses
-	Point p = secp->ComputePublicKey(&k);	
-
-	string chkAddr = secp->GetAddress(searchType, mode, p);
-	if (chkAddr != addr) {
-
-		// Key may be the opposite one (negative zero or compressed key)
-		k.Neg();
-		k.Add(&secp->order);
-		p = secp->ComputePublicKey(&k);
-		
-		string chkAddr = secp->GetAddress(searchType, mode, p);
-		if (chkAddr != addr) {
-			fprintf(stdout, "\nWarning, wrong private key generated !\n");
-			fprintf(stdout, "  Addr :%s\n", addr.c_str());
-			fprintf(stdout, "  Check:%s\n", chkAddr.c_str());
-			fprintf(stdout, "  Endo:%d incr:%d comp:%d\n", endomorphism, incr, mode);
-			return false;
-		}
-
-	}
-
-	output(addr, secp->GetPrivAddress(mode, k), k.GetBase16(), secp->GetPublicKeyHex(mode, p));
-
-	return true;
-}
-
 void VanitySearch::checkAddrSSE(uint8_t* h1, uint8_t* h2, uint8_t* h3, uint8_t* h4,
 	int32_t incr1, int32_t incr2, int32_t incr3, int32_t incr4,
 	Int& key, int endomorphism, bool mode) {
 
-	vector<string> addr = secp->GetAddress(searchType, mode, h1, h2, h3, h4);
+	std::vector<std::string> addr = secp->GetAddress(searchType, mode, h1, h2, h3, h4);
 
 	for (int i = 0; i < (int)inputAddresses.size(); i++) {
 
@@ -598,7 +578,7 @@ void VanitySearch::checkAddrSSE(uint8_t* h1, uint8_t* h2, uint8_t* h3, uint8_t* 
 
 void VanitySearch::checkAddr(int prefIdx, uint8_t* hash160, Int& key, int32_t incr, int endomorphism, bool mode) {
 	
-	vector<ADDRESS_ITEM>* pi = addresses[prefIdx].items;	
+	std::vector<ADDRESS_ITEM>* pi = addresses[prefIdx].items;	
 
 
 	if (onlyFull) {
@@ -627,17 +607,16 @@ void VanitySearch::checkAddr(int prefIdx, uint8_t* hash160, Int& key, int32_t in
 	else {
 		char a[64];
 
-		string addr = secp->GetAddress(searchType, mode, hash160);
+		std::string addr = secp->GetAddress(searchType, mode, hash160);
 
 		for (int i = 0; i < (int)pi->size(); i++) {
 
 			if (stopWhenFound && *((*pi)[i].found))
 				continue;
 
-			strncpy(a, addr.c_str(), (*pi)[i].addressLength);
-			a[(*pi)[i].addressLength] = 0;
-
-			if (strcmp((*pi)[i].address, a) == 0) {
+		std::string currentAddr(addr.c_str(), (*pi)[i].addressLength);
+		
+		if (currentAddr == std::string((*pi)[i].address, (*pi)[i].addressLength)) {
 
 				// Found it !
 				*((*pi)[i].found) = true;
@@ -675,8 +654,9 @@ void VanitySearch::checkAddresses(bool compressed, Int key, int i, Point p1) {
 	secp->GetHash160(searchType, compressed, p1, h0);
 	address_t pr0 = *(address_t*)h0;
 	if (addresses[pr0].items)
-		checkAddr(pr0, h0, key, i, 0, compressed);	
+		checkAddr(pr0, h0, key, i, 0, compressed);
 }
+
 
 void VanitySearch::checkAddressesSSE(bool compressed, Int key, int i, Point p1, Point p2, Point p3, Point p4) {
 
@@ -713,7 +693,7 @@ void VanitySearch::getGPUStartingKeys(Int& tRangeStart, Int& tRangeEnd, int grou
 		
 	int grp_startkeys = nbThread/256;
 
-	//New setting key by fixedpaul using addition on secp with batch modular inverse, super fast, multithreading not needed
+	//New setting key by Ezio using addition on secp with batch modular inverse, super fast, multithreading not needed
 
 	Int stepThread;
 	Int numthread;
@@ -876,6 +856,7 @@ void VanitySearch::getGPUStartingKeys(Int& tRangeStart, Int& tRangeEnd, int grou
 void VanitySearch::FindKeyGPU(TH_PARAM* ph) {
 
 	
+	
 
 	bool ok = true;
 
@@ -887,11 +868,11 @@ void VanitySearch::FindKeyGPU(TH_PARAM* ph) {
 
 	// Global init
 	int thId = ph->threadId;
-	GPUEngine g(ph->gpuId, maxFound);
+	GPUEngine g(ph->gpuId, maxFound, this->batchSize);
 	int numThreadsGPU = g.GetNbThread();
 	int STEP_SIZE = g.GetStepSize();
 	Point* publicKeys = new Point[numThreadsGPU];
-	vector<ITEM> found;
+	std::vector<ITEM> found;
 
 	fprintf(stdout, "GPU: %s\n", g.deviceName.c_str());
 	fflush(stdout);
@@ -983,6 +964,7 @@ void VanitySearch::FindKeyGPU(TH_PARAM* ph) {
 			t_Paused = ttot;
 		}
 		
+		
 
 		PrintStats(keys_n, keys_n_prev, ttot, tprev, taskSize, keycount);
 
@@ -1022,61 +1004,44 @@ void VanitySearch::FindKeyGPU(TH_PARAM* ph) {
 
 
 void VanitySearch::PrintStats(uint64_t keys_n, uint64_t keys_n_prev, double ttot, double tprev, Int taskSize, Int keycount) {
+    // Calculate statistics
+    double speed = (ttot > tprev) ? (keys_n - keys_n_prev) / (ttot - tprev) / 1000000.0 : 0;
+    double perc = (keycount.IsZero() || taskSize.IsZero()) ? 0 :
+                 (100.0 * keycount.ToDouble() / taskSize.ToDouble());
+    double log_keys = log2(static_cast<double>(keys_n));
 
-	double speed;
-	double perc;
-	double log_keys;
+    // Format time strings
+    auto format_time = [](double seconds) {
+        int h = static_cast<int>(seconds) / 3600;
+        int m = (static_cast<int>(seconds) % 3600) / 60;
+        int s = static_cast<int>(seconds) % 60;
+        return fmt::format("{:02d}:{:02d}:{:02d}", h, m, s);
+    };
 
-	Int Perc;
+    std::string status = Paused ? "PAUSED" : "RUNNING";
+    std::string elapsed = format_time(ttot);
+    std::string remaining = (perc >= 100) ? "COMPLETED" :
+                          format_time((100.0 - perc) * ttot / std::max(perc, 1.0));
 
-	Perc.Set(&taskSize);
-	Perc.Mult(65536);
-	Perc.Div(&keycount);
+    // Create progress bar
+    const int bar_width = 50;
+    int pos = static_cast<int>(bar_width * perc / 100.0);
+    std::string progress_bar = "[" + std::string(pos, '=') +
+                             (pos < bar_width ? ">" : "") +
+                             std::string(bar_width - pos - 1, ' ') + "]";
 
+    // Print status line
+    fmt::print("\r\033[K{} | {} | {:.1f} MK/s | 2^{:.2f} | {} {:.2f}% | Found: {} | ETA: {}",
+              status,
+              progress_bar,
+              speed,
+              log_keys,
+              (Paused ? "Paused at" : "Progress:"),
+              perc,
+              nbFoundKey,
+              remaining);
 
-	if (ttot > tprev) {
-		speed = (keys_n - keys_n_prev) / (ttot - tprev) / 1000000.0; // speed in Mkey/s
-	}
-
-
-	perc = (double)(1 / Perc.ToDouble()*100*65536);
-
-
-	log_keys = log2(static_cast<double>(keys_n));
-
-	int h_run = static_cast<int32_t>(ttot) / 3600;
-	int m_run = (static_cast<int32_t>(ttot) % 3600) / 60;
-	int s_run = static_cast<int32_t>(ttot) % 60;
-	int d_run = static_cast<int32_t>(ttot * 10) % 10;
-
-	double tempo_tot_stimato = ttot / (perc / 100.0);
-	double end_tt = tempo_tot_stimato - ttot;
-
-	int h_end = static_cast<int32_t>(end_tt) / 3600;
-	int m_end = (static_cast<int32_t>(end_tt) % 3600) / 60;
-	int s_end = static_cast<int32_t>(end_tt) % 60;
-	int d_end = static_cast<int32_t>(end_tt * 10) % 10;
-
-	if (!Paused) {
-
-		if (h_end>=0)
-			printf("%.1f MK/s - 2^%.2f [%.2f%%] - RUN: %02d:%02d:%02d.%01d|END: %02d:%02d:%02d.%01d - Found: %d     ",
-				speed, log_keys, perc, h_run, m_run, s_run, d_run, h_end, m_end, s_end, d_end, nbFoundKey);
-		else
-			printf("%.1f MK/s - 2^%.2f [%.2f%%] - RUN: %02d:%02d:%02d.%01d|END: Too much bro - Found: %d     ",
-				speed, log_keys, perc, h_run, m_run, s_run, d_run, nbFoundKey);
-	} else {
-		printf("Paused - 2^%.2f [%.2f%%] - RUN: %02d:%02d:%02d.%01d|END: %02d:%02d:%02d.%01d - Found: %d     ",
-		log_keys, perc, h_run, m_run, s_run, d_run, h_end, m_end, s_end, d_end, nbFoundKey);
-
-		endOfSearch = true;
-    }
-
-
-	printf("\r");
-
-
-	fflush(stdout);
+    fflush(stdout);
 }
 
 bool VanitySearch::isAlive(TH_PARAM * p) {
@@ -1169,15 +1134,16 @@ void VanitySearch::Search(std::vector<int> gpuId, std::vector<int> gridSize) {
 	}
 
 	
+
 	if (params != nullptr) {
 		free(params);
 	}
 
 }
 
-string VanitySearch::GetHex(vector<unsigned char> &buffer) {
+std::string VanitySearch::GetHex(std::vector<unsigned char> &buffer) {
 
-	string ret;
+	std::string ret;
 
 	char tmp[128];
 	for (int i = 0; i < (int)buffer.size(); i++) {

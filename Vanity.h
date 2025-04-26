@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
-*/
+ */
 
 #ifndef VANITYH
 #define VANITYH
@@ -59,7 +59,7 @@ typedef struct {
 
 typedef struct {
 
-	char* address;
+	std::string address;
 	int addressLength;
 	address_t sAddress;	
 	bool* found;
@@ -91,7 +91,7 @@ class VanitySearch {
 public:
 
 	VanitySearch(Secp256K1* secp, std::vector<std::string>& address, int searchMode,
-		bool stop, std::string outputFile, uint32_t maxFound, BITCRACK_PARAM* bc);
+	    bool stop, std::string outputFile, uint32_t maxFound, BITCRACK_PARAM* bc, int batchSize);
 
 	void Search(std::vector<int> gpuId, std::vector<int> gridSize);
 	void FindKeyGPU(TH_PARAM* p);
@@ -107,7 +107,7 @@ private:
 		Int& key, int endomorphism, bool mode);
 	void checkAddresses(bool compressed, Int key, int i, Point p1);
 	void checkAddressesSSE(bool compressed, Int key, int i, Point p1, Point p2, Point p3, Point p4);
-	void output(std::string addr, std::string pAddr, std::string pAddrHex, std::string pubKey);
+	void output(const std::vector<std::tuple<std::string, std::string, std::string, std::string>>& foundKeys);
 
 #ifdef WIN64
 	HANDLE mutex;
@@ -145,9 +145,10 @@ private:
 	std::vector<ADDRESS_TABLE_ITEM> addresses;
 	std::vector<address_t> usedAddress;
 	std::vector<LADDRESS> usedAddressL;
-	std::vector<std::string>& inputAddresses;	
+	std::vector<std::string>& inputAddresses;
 
 	BITCRACK_PARAM* bc;
+	int batchSize;
 	void saveProgress(TH_PARAM* p, Int& lastSaveKey, BITCRACK_PARAM* bc);
 
 	Int firstGPUThreadLastPrivateKey;
@@ -156,6 +157,8 @@ private:
 	Int lambda;
 	Int beta2;
 	Int lambda2;
+	
+	std::vector<std::tuple<std::string, std::string, std::string, std::string>> foundKeys;
 };
 
 #endif // VANITYH

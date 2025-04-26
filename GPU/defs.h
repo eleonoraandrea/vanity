@@ -34,11 +34,11 @@ typedef char i8;
 	#ifdef OLD_GPU
 		#define BLOCK_SIZE			512
 		//can be 8, 16, 24, 32, 40, 48, 56, 64
-		#define PNT_GROUP_CNT		64	
+		#define PNT_GROUP_CNT		1024
 	#else
 		#define BLOCK_SIZE			256
 		//can be 8, 16, 24, 32
-		#define PNT_GROUP_CNT		24
+		#define PNT_GROUP_CNT		1024
 	#endif
 #else //CPU, fake values
 	#define BLOCK_SIZE			512

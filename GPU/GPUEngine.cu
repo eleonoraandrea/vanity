@@ -13,13 +13,14 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
-*/
+ */
 
 #ifndef WIN64
 #include <unistd.h>
 #include <stdio.h>
 #endif
 
+#include "../GPU/defs.h" // Include for BLOCK_SIZE definition
 #include "GPUEngine.h"
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -79,14 +80,14 @@ int _ConvertSMVer2Cores(int major, int minor) {
 #define GRP_SIZE 1024
 #define STEP_SIZE GRP_SIZE*1
 
-__global__ void comp_keys(address_t* sAddress, uint32_t* lookup32, uint64_t* keys, uint32_t* out) {
+__global__ void comp_keys(address_t* sAddress, uint32_t* lookup32, uint64_t* keys, uint32_t* out, int batchSize) {
 
 
     uint64_t* startx = keys + (blockIdx.x * blockDim.x) * 8;
     uint64_t* starty = keys + (blockIdx.x * blockDim.x) * 8 + 4 * blockDim.x;
 
 
-    uint64_t dx[4];  
+    uint64_t dx[4];
     uint64_t px[4];
     uint64_t py[4];
     uint64_t dy[4];
@@ -152,11 +153,11 @@ __global__ void comp_keys(address_t* sAddress, uint32_t* lookup32, uint64_t* key
         ModSub256(py, sx, px);
         _ModMult(py, dy);
         ModSub256isOdd(py, sy, &odd_py);
-
-        _GetHash160Comp(px, odd_py, (uint8_t*)h);
+_GetHash160Comp(px, odd_py, (uint8_t*)h);
         CheckPoint(h, GRP_SIZE / 2 + (i + 1), sAddress, lookup32, out);
 
         //////////////////
+
 
         __syncthreads();
 
@@ -168,11 +169,11 @@ __global__ void comp_keys(address_t* sAddress, uint32_t* lookup32, uint64_t* key
         ModSub256(py, px, sx);
         _ModMult(py, dy);
         ModSub256isOdd(syn, py, &odd_py);
-
-        _GetHash160Comp(px, odd_py, (uint8_t*)h);
+_GetHash160Comp(px, odd_py, (uint8_t*)h);
         CheckPoint(h, GRP_SIZE / 2 - (i + 1), sAddress, lookup32, out);
 
         //////////////////
+
 
         ModSub256(dx, Gx[i], sx);
         _ModMult(inverse, dx);
@@ -192,11 +193,11 @@ __global__ void comp_keys(address_t* sAddress, uint32_t* lookup32, uint64_t* key
     ModSub256(py, px, sx);
     _ModMult(py, dy);
     ModSub256isOdd(syn, py, &odd_py);
+_GetHash160Comp(px, odd_py, (uint8_t*)h);
+        CheckPoint(h, 0, sAddress, lookup32, out);
 
-    _GetHash160Comp(px, odd_py, (uint8_t*)h);
-    CheckPoint(h, 0, sAddress, lookup32, out);
+        //////////////////
 
-    //////////////////
 
     __syncthreads();
 
@@ -220,7 +221,6 @@ __global__ void comp_keys(address_t* sAddress, uint32_t* lookup32, uint64_t* key
 
 }
 
-
 // ---------------------------------------------------------------------------------------
 int NB_TRHEAD_PER_GROUP;
 
@@ -231,13 +231,17 @@ std::string globalGPUname;
 
 
 
-GPUEngine::GPUEngine(int gpuId, uint32_t maxFound) {
+GPUEngine::GPUEngine(int gpuId, uint32_t maxFound, int batchSize) {
+    this->batchSize = batchSize;
 
     cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, gpuId);
 
-    NB_TRHEAD_PER_GROUP = 256;                                          //////////////////  GRID SIZE ////////////////
-    int nbThreadGroup = deviceProp.multiProcessorCount * 128;
+    NB_TRHEAD_PER_GROUP = BLOCK_SIZE;                                          //////////////////  GRID SIZE ////////////////
+    size_t freeMemory, totalMemory;
+    cudaMemGetInfo(&freeMemory, &totalMemory);
+    int nbThreadGroup = (freeMemory / (NB_TRHEAD_PER_GROUP * 32 * 2)) * deviceProp.multiProcessorCount;
+    nbThreadGroup = std::min(nbThreadGroup, deviceProp.multiProcessorCount * 256);
 
 
     uint64_t powerOfTwo = 1;
@@ -281,9 +285,10 @@ GPUEngine::GPUEngine(int gpuId, uint32_t maxFound) {
         return;
     }
 
-   
 
-    this->nbThread = nbThreadGroup * NB_TRHEAD_PER_GROUP;//////////////////////////////////////////////////////////////////
+    
+
+    this->nbThread = nbThreadGroup * NB_TRHEAD_PER_GROUP;
     this->maxFound = maxFound;
     this->outputSize = (maxFound * ITEM_SIZE + 4);
 
@@ -338,7 +343,7 @@ GPUEngine::GPUEngine(int gpuId, uint32_t maxFound) {
         printf("GPUEngine: Allocate address pinned memory: %s\n", cudaGetErrorString(err));
         return;
     }
-    err = cudaMalloc((void**)&inputKey, nbThread * 32 * 2);
+    err = cudaMallocManaged((void**)&inputKey, nbThread * 32 * 2, cudaMemAttachGlobal);
     if (err != cudaSuccess) {
         printf("GPUEngine: Allocate input memory: %s\n", cudaGetErrorString(err));
         return;
@@ -365,6 +370,7 @@ GPUEngine::GPUEngine(int gpuId, uint32_t maxFound) {
     pattern = "";
     hasPattern = false;
     inputAddressLookUp = NULL;
+    this->batchSize = batchSize;
 
 }
 
@@ -378,12 +384,12 @@ GPUEngine::~GPUEngine() {
 }
 
 
+// ---------------------------------------------------------------------------------------
 
 void GPUEngine::PrintCudaInfo() {
 
     int deviceCount = 0;
     cudaError_t error_id = cudaGetDeviceCount(&deviceCount);
-
 
     for (int i = 0;i < deviceCount;i++) {
 
@@ -397,6 +403,7 @@ void GPUEngine::PrintCudaInfo() {
 }
 
 
+// ---------------------------------------------------------------------------------------
 
 int GPUEngine::GetNbThread() {
     return nbThread;
@@ -412,7 +419,7 @@ void GPUEngine::SetSearchType(int searchType) {
 
 
 
-
+// ---------------------------------------------------------------------------------------
 
 void GPUEngine::SetAddress(std::vector<address_t> addresses) {
 
@@ -457,6 +464,8 @@ void GPUEngine::SetPattern(const char* pattern) {
 }
 
 
+
+// ---------------------------------------------------------------------------------------
 
 void GPUEngine::SetAddress(std::vector<LADDRESS> addresses, uint32_t totalAddress) {
 
@@ -521,15 +530,15 @@ int GPUEngine::GetGroupSize() {
 }
 
 
-bool GPUEngine::callKernel() {
+// ---------------------------------------------------------------------------------------
+bool GPUEngine::callKernel(int batchSize) {
 
-   
+
     // Reset nbFound
     cudaMemset(outputBuffer, 0, 4);
 
-    comp_keys << < nbThread / NB_TRHEAD_PER_GROUP, NB_TRHEAD_PER_GROUP >> >
-        (inputAddress, inputAddressLookUp, inputKey, outputBuffer);
-
+    comp_keys << < nbThread / (NB_TRHEAD_PER_GROUP * batchSize), NB_TRHEAD_PER_GROUP >> >
+        (inputAddress, inputAddressLookUp, inputKey, outputBuffer, batchSize);
 
 
 
@@ -547,6 +556,7 @@ bool GPUEngine::callKernel() {
 }
 
 
+// ---------------------------------------------------------------------------------------
 bool GPUEngine::SetKeys(Point* p) {
 
     // Sets the starting keys for each thread
@@ -580,15 +590,17 @@ bool GPUEngine::SetKeys(Point* p) {
         printf("GPUEngine: SetKeys: %s\n", cudaGetErrorString(err));
     }
 
-    return callKernel();
+    return callKernel(this->batchSize);
 
 }
 
 
+// ---------------------------------------------------------------------------------------
 
 bool GPUEngine::Launch(std::vector<ITEM>& addressFound, bool spinWait) {
 
     addressFound.clear();
+    addressFound.reserve(maxFound);
     
 
     // Get the result
@@ -649,7 +661,12 @@ bool GPUEngine::Launch(std::vector<ITEM>& addressFound, bool spinWait) {
         addressFound.push_back(it);
     }
 
-    return callKernel();
+    if (nbFound > 0 && batchSize > 1) {
+        batchSize /= 2;
+        printf("Reducing batch size to %d to prevent excessive memory usage\n", batchSize);
+    }
+
+    return callKernel(this->batchSize);
 
 }
 
@@ -667,6 +684,8 @@ std::string toHex(unsigned char* data, int length) {
 }
 
 
+
+// ---------------------------------------------------------------------------------------
 
 void GPUEngine::FreeGPUEngine() {  //free gpu for Pause function
 
