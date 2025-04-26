@@ -59,3 +59,4 @@ Linux
 # License
 
 VanitySearch is licensed under GPLv3.
+# vanity
